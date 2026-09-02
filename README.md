@@ -15,10 +15,11 @@ As Rails applications grow, model callbacks can become cluttered with business l
 ## Features
 
 - 🎯 **Simple integration** - Just include a module in your ActiveRecord models
-- 🔄 **Lifecycle hooks** - Respond to create, update, and destroy commits
+- 🔄 **Lifecycle hooks** - Respond to before and after commit events for create, update, and destroy
 - 🚫 **Skippable observers** - Disable observers per-instance when needed
 - 🧩 **Convention-based** - Auto-discovers observer classes (e.g., `UserObserver` for `User`)
-- ⚡ **After-commit callbacks** - Ensures database transactions complete before running observers
+- ⚡ **Before-commit callbacks** - Enables observer actions to run before changes are committed
+- ⚡ **After-commit callbacks** - Ensures database transactions complete before running observer actions
 - 🧪 **Test-friendly** - Easy to bypass observers in test scenarios
 
 ## Requirements
@@ -38,12 +39,6 @@ And then execute:
 
 ```bash
 $ bundle install
-```
-
-Or install it yourself as:
-
-```bash
-$ gem install observable_model
 ```
 
 ## Usage
@@ -67,6 +62,18 @@ ObservableModel uses a naming convention: for a model named `User`, create a `Us
 ```ruby
 # app/observers/user_observer.rb
 class UserObserver < ObservableModel::Observers::Base
+  def pre_create
+    # Called before the record is created
+  end
+
+  def pre_update
+    # Called before the record is updated
+  end
+
+  def pre_destroy
+    # Called before the record is destroyed
+  end
+
   def on_create_commit
     # Called after a user is created and committed to the database
     WelcomeMailer.welcome_email(@observable).deliver_later
@@ -89,34 +96,31 @@ end
 
 The `@observable` instance variable contains the model instance that triggered the event.
 
-### Advanced Usage
+### Skipping Observers
 
-#### Skipping Observers
-
-Sometimes you need to bypass observers (e.g., in tests, bulk operations, or specific business logic):
+To bypass observers for a specific operation:
 
 ```ruby
-# Skip observers for a specific instance
 user = User.new(name: "John Doe")
 user.skip_observers = true
 user.save  # No observer callbacks will be triggered
 ```
 
-#### Custom Observer Class Names
+### Custom Observer Class Names
 
-If you need to customize the observer class name, override the `observer_class_name` method:
+Override `observer_class_name` to use a non-conventional class name:
 
 ```ruby
 class User < ApplicationRecord
   include ObservableModel::Sources::ActiveRecordObservable
-  
+
   def observer_class_name
     "CustomUserObserver"
   end
 end
 ```
 
-#### Organizing Observers
+### Organizing Observers
 
 We recommend creating an `app/observers` directory in your Rails application:
 
@@ -136,14 +140,16 @@ config.autoload_paths += %W(#{config.root}/app/observers)
 
 ## How It Works
 
-ObservableModel uses ActiveRecord's `after_commit` callbacks to ensure observers are only triggered after database transactions successfully complete. This prevents observers from running if a transaction is rolled back.
+When you include `ObservableModel::Sources::ActiveRecordObservable` in your model, six callbacks are registered:
 
-When you include `ObservableModel::Sources::ActiveRecordObservable` in your model:
+- `before_create` → `pre_create`
+- `before_update` → `pre_update`
+- `before_destroy` → `pre_destroy`
+- `after_create_commit` → `on_create_commit`
+- `after_update_commit` → `on_update_commit`
+- `after_destroy_commit` → `on_destroy_commit`
 
-1. Three `after_*_commit` callbacks are registered
-2. On each event, the model looks for a corresponding observer class
-3. If found, the observer is instantiated with the model instance
-4. The appropriate observer method is called (unless `skip_observers` is true)
+On each event, the model looks up the observer class by convention, instantiates it with itself, and delegates the callback to it. If `skip_observers` is `true`, no observer is instantiated and all callbacks are silently skipped.
 
 ## Examples
 
@@ -153,6 +159,16 @@ When you include `ObservableModel::Sources::ActiveRecordObservable` in your mode
 class UserObserver < ObservableModel::Observers::Base
   def on_create_commit
     UserMailer.welcome_email(@observable).deliver_later
+  end
+end
+```
+
+### Example: Validate State Before Destruction
+
+```ruby
+class OrderObserver < ObservableModel::Observers::Base
+  def pre_destroy
+    raise "Cannot delete a completed order" if @observable.completed?
   end
 end
 ```
@@ -197,7 +213,6 @@ $ bundle exec rake spec
 
 ## Roadmap
 
-- [ ] Support for additional lifecycle events (before_save, etc.)
 - [ ] Observer registration/configuration DSL
 - [ ] Built-in async observer execution
 - [ ] Observer metrics and monitoring hooks
