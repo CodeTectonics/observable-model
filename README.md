@@ -1,8 +1,5 @@
 # ObservableModel
 
-[![Gem Version](https://badge.fury.io/rb/observable_model.svg)](https://badge.fury.io/rb/observable_model)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 A Ruby gem that implements the Observer pattern for ActiveRecord models in Rails applications. ObservableModel provides a clean, organized way to respond to model lifecycle events (create, update, destroy) without cluttering your models with callback logic.
 
 ## Why ObservableModel?
